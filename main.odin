@@ -59,7 +59,7 @@ drawBall :: proc(ball: Ball) {
 
 // Gets the angle between the ball and the mouse position
 getBallAngle :: proc(mouse_xpos: f32, mouse_ypos: f32) -> f32{
-    return math.atan((mouse_xpos - BALL_START_X_POS) / (mouse_ypos - BALL_START_Y_POS))
+    return math.atan((mouse_xpos - BALL_START_X_POS) / math.abs(mouse_ypos - BALL_START_Y_POS))
 }
 
 main :: proc() {
