@@ -16,12 +16,12 @@ PEG_AMOUNT :: 25
 GRAVITY :: 500
 BALL_INIT_SPEED :: Vector2{300, 200}
 BALL_INIT_POS :: Vector2{400, 50}
-BALL_SIZE :: 5
-PEG_SIZE :: 5
+BALL_SIZE :: 7
+PEG_SIZE :: 7
 
 Peg :: struct {
     pos: Vector2,
-    activated: bool,
+    hit: bool,
 }
 
 Ball :: struct {
@@ -60,7 +60,7 @@ generatePegs :: proc() -> (pegs: [PEG_AMOUNT]Peg){
 // Draws each peg in the list at their position
 drawPegs :: proc(pegs: [PEG_AMOUNT]Peg) {
     for peg in pegs {
-        if !peg.activated {
+        if !peg.hit {
             raylib.DrawCircle(i32(peg.pos.x), i32(peg.pos.y), PEG_SIZE, raylib.BLACK)
         }
     }
@@ -73,17 +73,18 @@ drawBall :: proc(ball: Ball) {
 
 // Gets the angle between the ball and the mouse position
 getBallAngleFromPoint :: proc(point: Vector2, ball: Ball) -> Vector2 {
-    x_angle := math.atan((point.x - ball.pos.x) / math.abs(point.y - ball.pos.y))
-    y_angle := math.atan((point.y - ball.pos.y) / math.abs(point.y - ball.pos.x))
+    x_angle := (math.atan((point.x - ball.pos.x) / abs(point.y - ball.pos.y)) * 2) / math.PI
+    y_angle := (math.atan((point.y - ball.pos.y) / abs(point.y - ball.pos.x)) * 2) / math.PI
     return Vector2{x_angle, y_angle}
 }
+
 
 main :: proc() {
     raylib.InitWindow(SCREEN_WIDTH, SCREEN_HEIGHT, "Window")
     raylib.SetTargetFPS(30)
 
     pegs := generatePegs()
-    ball := Ball{BALL_INIT_POS, Vector2{0, 0}, false}
+    ball := Ball{BALL_INIT_POS, Vector2{}, false}
 
     points := 0
     game_running := true
@@ -112,10 +113,10 @@ main :: proc() {
                 // Adjusts the velocity of the ball
                 ball.speed.y += GRAVITY * deltaTime
                 if ball.speed.x > 0 {
-                    ball.speed.x -= 5
+                    ball.speed.x -= 2
                 }
                 else if ball.speed.x < 0 {
-                    ball.speed.x += 5
+                    ball.speed.x += 2
                 }
 
                 // Moves ball
@@ -125,14 +126,14 @@ main :: proc() {
                 // Collision
                 for i in 0..<PEG_AMOUNT {
                     
-                    if !pegs[i].activated && raylib.CheckCollisionCircles(pegs[i].pos, PEG_SIZE, ball.pos, BALL_SIZE) {
+                    if !pegs[i].hit && raylib.CheckCollisionCircles(pegs[i].pos, PEG_SIZE, ball.pos, BALL_SIZE) {
                         ball_angle := getBallAngleFromPoint(pegs[i].pos, ball)
 
                         // Adjusts the velocity of the ball from the collision (Not good)
-                        ball.speed.x = -ball.speed.x * ball_angle.x
-                        ball.speed.y = -ball.speed.y + 50
+                        ball.speed.x *= raylib.Clamp(-ball_angle.x * 1.1, -100, 100)
+                        ball.speed.y *= -0.6
 
-                        pegs[i].activated = true
+                        pegs[i].hit = true
                         points += 1
                     }
                 }
@@ -145,16 +146,17 @@ main :: proc() {
                 }
                 // Inverts the velocity of the ball if it hits the edge of the screen
                 if (ball.pos.x - BALL_SIZE) < 0 || (ball.pos.x + BALL_SIZE) > SCREEN_WIDTH{
-                    ball.speed.x *= -1
+                    ball.speed.x *= -0.9
                 }
             }
 
             for peg in pegs {
-                if !peg.activated {
-                    break
+                if peg.hit {
+                    game_running = false
                 }
                 else {
-                   game_running = false
+                    game_running = true
+                    break
                 }
             }
         }
