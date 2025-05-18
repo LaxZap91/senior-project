@@ -87,7 +87,7 @@ main :: proc() {
 
     points := 0
     point_mod := 1
-    balls_left := 2
+    balls_left := 15
     game_running := true
 
 
