@@ -3,40 +3,36 @@ package main
 import "core:fmt"
 import "core:math/rand"
 import "core:math"
-import "core:time"
-import "core:strconv"
 import "core:strings"
 import "vendor:raylib"
 
-Vector2 :: [2]f32
-
 SCREEN_WIDTH :: 800
 SCREEN_HEIGHT :: 450
-PEG_AMOUNT :: 25
+PEG_AMOUNT :: 30
 GRAVITY :: 500
-BALL_INIT_SPEED :: Vector2{300, 200}
-BALL_INIT_POS :: Vector2{400, 50}
-BALL_SIZE :: 7
-PEG_SIZE :: 7
+BALL_INIT_SPEED :: raylib.Vector2{300, 200}
+BALL_INIT_POS :: raylib.Vector2{400, 50}
+BALL_SIZE :: 8
+PEG_SIZE :: 8
 
 Peg :: struct {
-    pos: Vector2,
+    pos: raylib.Vector2,
     hit: bool,
 }
 
 Ball :: struct {
-    pos: Vector2,
-    speed: Vector2,
+    pos: raylib.Vector2,
+    speed: raylib.Vector2,
     isActive: bool,
 }
 
 // Randomly generates postions for pegs
 generatePegs :: proc() -> (pegs: [PEG_AMOUNT]Peg){
-    pos: Vector2
+    pos: raylib.Vector2
     for i in 0..<len(pegs) {
         for {
             regenerate := false
-            pos = Vector2{f32(100 + rand.int31_max(600)), f32(75 + rand.int31_max(350))}
+            pos = raylib.Vector2{f32(50 + rand.int31_max(700)), f32(rand.int31_max(400))}
 
             // Checks if pegs are colliding
             for j in 0..<i {
@@ -44,6 +40,9 @@ generatePegs :: proc() -> (pegs: [PEG_AMOUNT]Peg){
                     regenerate = true
                     break
                 }
+            }
+            if !raylib.CheckCollisionPointCircle(pos, raylib.Vector2{400, 450}, 350) {
+                regenerate = true
             }
             if !regenerate {
                 break
@@ -72,10 +71,10 @@ drawBall :: proc(ball: Ball) {
 }
 
 // Gets the angle between the ball and the mouse position
-getBallAngleFromPoint :: proc(point: Vector2, ball: Ball) -> Vector2 {
+getBallAngleFromPoint :: proc(point: raylib.Vector2, ball: Ball) -> raylib.Vector2 {
     x_angle := (math.atan((point.x - ball.pos.x) / abs(point.y - ball.pos.y)) * 2) / math.PI
-    y_angle := (math.atan((point.y - ball.pos.y) / abs(point.y - ball.pos.x)) * 2) / math.PI
-    return Vector2{x_angle, y_angle}
+    y_angle := (math.atan((point.y - ball.pos.y) / abs(point.x - ball.pos.x)) * 2) / math.PI
+    return raylib.Vector2{x_angle, y_angle}
 }
 
 
@@ -84,9 +83,11 @@ main :: proc() {
     raylib.SetTargetFPS(30)
 
     pegs := generatePegs()
-    ball := Ball{BALL_INIT_POS, Vector2{}, false}
+    ball := Ball{BALL_INIT_POS, raylib.Vector2{}, false}
 
     points := 0
+    point_mod := 1
+    balls_left := 2
     game_running := true
 
 
@@ -98,30 +99,22 @@ main :: proc() {
             // Activates the ball
             if raylib.IsMouseButtonPressed(.LEFT) && !ball.isActive {
                 // Gets the angle between the ball and the mouse
-                mouse_pos := raylib.GetMousePosition()
-                mouse_angle := getBallAngleFromPoint(mouse_pos, ball)
+                mouse_angle := getBallAngleFromPoint(raylib.GetMousePosition(), ball)
 
 
                 // Activates ball and sets initial speed
                 ball.isActive = true
-                ball.speed.x = BALL_INIT_SPEED.x * mouse_angle.x
-                ball.speed.y = BALL_INIT_SPEED.y * mouse_angle.y
+                ball.speed = BALL_INIT_SPEED * mouse_angle
             }
 
             // Deals with ball physics
             if ball.isActive {
                 // Adjusts the velocity of the ball
                 ball.speed.y += GRAVITY * deltaTime
-                if ball.speed.x > 0 {
-                    ball.speed.x -= 2
-                }
-                else if ball.speed.x < 0 {
-                    ball.speed.x += 2
-                }
+                ball.speed.x = -raylib.Lerp(ball.speed.x, 0, 2)
 
                 // Moves ball
-                ball.pos.y += ball.speed.y * deltaTime
-                ball.pos.x += ball.speed.x * deltaTime
+                ball.pos += ball.speed * deltaTime
 
                 // Collision
                 for i in 0..<PEG_AMOUNT {
@@ -129,12 +122,13 @@ main :: proc() {
                     if !pegs[i].hit && raylib.CheckCollisionCircles(pegs[i].pos, PEG_SIZE, ball.pos, BALL_SIZE) {
                         ball_angle := getBallAngleFromPoint(pegs[i].pos, ball)
 
-                        // Adjusts the velocity of the ball from the collision (Not good)
-                        ball.speed.x *= raylib.Clamp(-ball_angle.x * 1.1, -100, 100)
-                        ball.speed.y *= -0.6
+                        // Adjusts the velocity of the ball from the collision
+                        ball.speed.x *= -0.8 * math.sign(ball_angle.x)
+                        ball.speed.y *= -0.8 * math.sign(ball_angle.y)
 
                         pegs[i].hit = true
-                        points += 1
+                        points += point_mod
+                        point_mod += 1
                     }
                 }
 
@@ -143,13 +137,16 @@ main :: proc() {
                     ball.pos = BALL_INIT_POS
                     ball.speed = BALL_INIT_SPEED
                     ball.isActive = false
+                    point_mod = 1
+                    balls_left -= 1
                 }
                 // Inverts the velocity of the ball if it hits the edge of the screen
                 if (ball.pos.x - BALL_SIZE) < 0 || (ball.pos.x + BALL_SIZE) > SCREEN_WIDTH{
                     ball.speed.x *= -0.9
                 }
             }
-
+            
+            
             for peg in pegs {
                 if peg.hit {
                     game_running = false
@@ -159,21 +156,28 @@ main :: proc() {
                     break
                 }
             }
+            if balls_left == 0 {
+                game_running = false
+            }
         }
-        
 
 
         // Draw
         raylib.BeginDrawing()
             raylib.ClearBackground(raylib.WHITE)
 
+            points_txt := raylib.TextFormat("Points: %d", points)
             if game_running {
                 drawPegs(pegs)
                 drawBall(ball)
+
+                balls_left_txt := raylib.TextFormat("Balls Remaining: %d", balls_left)
+
+                raylib.DrawText(points_txt, 5, 5, 20, raylib.BLACK)
+                raylib.DrawText(balls_left_txt, 5, 10+20, 20, raylib.BLACK)
             }
             else {
-                points := strings.clone_to_cstring(fmt.tprintf("Points: %d", points))
-                raylib.DrawText(points, 300, 225, 50, raylib.BLACK)
+                raylib.DrawText(points_txt, (SCREEN_WIDTH / 2) - (raylib.MeasureText(points_txt, 50) / 2), (SCREEN_HEIGHT / 2) - 25, 50, raylib.BLACK)
             }
 
         raylib.EndDrawing()
